@@ -124,13 +124,13 @@ Below is the visual diagram illustrating the system's architecture and component
 
 ```mermaid
 graph TD
-    FE[React Frontend] -->|HTTP Requests| BE[NestJS API Server]
+    FE["React Frontend"] -->|HTTP Requests| BE["NestJS API Server"]
 
-    BE -->|Writes Metadata| DB[(PostgreSQL Database)]
-    BE -->|Saves Originals| ST[Storage Provider]
-    BE -->|Queues Jobs| Queue[BullMQ Queue <br/> backed by Redis]
+    BE -->|Writes Metadata| DB[("PostgreSQL Database")]
+    BE -->|Saves Originals| ST["Storage Provider"]
+    BE -->|Queues Jobs| Queue["BullMQ Queue <br/> backed by Redis"]
 
-    Queue -->|Consumes Jobs| Worker[Worker Service]
+    Queue -->|Consumes Jobs| Worker["Worker Service"]
 
     Worker -->|Updates Metadata| DB
     Worker -->|Reads / Writes Images| ST
