@@ -104,6 +104,45 @@ async function start() {
   });
 
   console.log('BullMQ Worker is running and waiting for jobs...');
+
+  // Graceful shutdown handling (Option A)
+  const gracefulShutdown = async (signal: string) => {
+    console.log(`Received ${signal}. Starting graceful shutdown...`);
+    
+    console.log('Closing BullMQ worker (waiting for active jobs to complete)...');
+    try {
+      // Closes the worker, refusing new jobs and waiting for active ones to finish
+      await worker.close();
+      console.log('BullMQ worker closed.');
+    } catch (err: unknown) {
+      console.error('Error closing BullMQ worker:', err);
+    }
+
+    console.log('Closing database connection...');
+    try {
+      await dataSource.destroy();
+      console.log('Database connection closed.');
+    } catch (err: unknown) {
+      console.error('Error closing database connection:', err);
+    }
+
+    console.log('Graceful shutdown complete. Exiting.');
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => {
+    gracefulShutdown('SIGTERM').catch((err) => {
+      console.error('Error during graceful shutdown:', err);
+      process.exit(1);
+    });
+  });
+
+  process.on('SIGINT', () => {
+    gracefulShutdown('SIGINT').catch((err) => {
+      console.error('Error during graceful shutdown:', err);
+      process.exit(1);
+    });
+  });
 }
 
 start().catch((err) => {

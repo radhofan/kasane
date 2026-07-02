@@ -193,6 +193,8 @@ The system is designed with a **layered, asynchronous worker architecture** to r
 * **How it works:** The React frontend polls the job status (`GET /jobs/:id`) starting at 2s intervals. If the job takes longer, it backs off to 4s, 8s, and caps at 16s. Polling stops immediately upon job completion or failure.
 * **Why this choice:** Polling is a simple and reliable way to fetch status. Using exponential backoff protects the server from being spammed with requests by active clients during periods of high queue congestion or long-running tasks.
 
+
+
 ### 3.2 Architecture Diagram
 
 Below is the visual diagram illustrating the system's architecture and component interactions.
@@ -210,3 +212,30 @@ graph TD
     Worker -->|Updates Metadata| DB
     Worker -->|Reads / Writes Images| ST
 ```
+
+---
+
+## 4. Graceful Crash Handling & Fault Tolerance
+
+Project Kasane implements a "defense-in-depth" fault tolerance strategy to ensure that worker crashes, database blips, and server shutdowns are handled gracefully without leaving the system in a locked state or losing track of active jobs.
+
+### 1. Visibility Timeout & Lock Expiration (BullMQ)
+* **Mechanism:** When the worker process takes a job from the queue, BullMQ locks the job in Redis (default 30 seconds). The worker continuously renews this lock in the background while processing.
+* **Failure Recovery:** If the worker crashes hard (e.g., OOM kill, hardware failure) and stops renewing the lock, the lock expires. BullMQ detects the expired lock, assumes the worker has died, releases the job, and makes it available for other active workers to retry.
+
+### 2. Automatic Exponential Retries
+* **Mechanism:** Every job is enqueued in the NestJS backend with `attempts: 3` and an exponential backoff delay starting at 1000ms.
+* **Failure Recovery:** If a transient failure occurs (such as a temporary database disconnect or an upload timeout), the worker re-throws the exception, and BullMQ schedules a retry. The job will be retried up to 3 times with increasing delays ($1\text{s}$, $2\text{s}$, $4\text{s}$) before it is finally marked as failed.
+
+### 3. Idempotent Processing (Overwrite Protection)
+* **Mechanism:** All files and database entries are mapped directly to the unique `jobId` UUID generated upon initial upload.
+* **Failure Recovery:** If a worker crashes halfway through processing and the job is retried, the second attempt will overwrite the existing file keys (`originals/jobId.ext` and `processed/jobId.webp`) rather than creating duplicate orphaned files. This guarantees that multiple attempts always result in the same consistent final state.
+
+### 4. Graceful Shutdown (OS Signal Interceptors)
+* **Mechanism:** The background worker listens to OS termination signals (`SIGTERM` and `SIGINT`).
+* **Failure Recovery:** Upon intercepting a shutdown request (e.g., container stopping or system reboot), the worker invokes `worker.close()`. This stops the worker from taking new jobs from the queue and gives any active image processing tasks a chance to finish. Once complete, it closes all PostgreSQL database connections (`dataSource.destroy()`) and exits cleanly.
+
+### 5. Startup Stalled Sweeper (Orphaned Job Recovery)
+* **Mechanism:** On application startup, the NestJS backend executes a database sweeper query.
+* **Failure Recovery:** The query identifies any database jobs stuck in the `pending` or `processing` state for more than 5 minutes (indicating a hard worker crash that prevented it from updating the database status) and marks them as `failed` with the error message `"Job stalled due to worker crash or timeout"`. This ensures the frontend immediately stops polling and displays a clean error state to the user.
+
