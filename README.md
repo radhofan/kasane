@@ -10,7 +10,7 @@
 
 ## 1. Docker Compose Tutorial
 
-If you have Docker Desktop installed, you can spin up the entire monorepo stack (PostgreSQL, Redis, NestJS Backend, Background Worker, and React Frontend) with a single command from the project root:
+If you have Docker Desktop installed, you can start up the entire monorepo stack (PostgreSQL, Redis, NestJS Backend, Background Worker, and React Frontend) with docker from root:
 
 ```bash
 # Build and start all services
@@ -18,12 +18,16 @@ docker compose up --build
 ```
 
 ### Accessing the Application
+
 Once the containers are running, you can access the services directly at these URLs:
-* **Frontend UI:** [http://localhost:5173](http://localhost:5173)
-* **Backend API:** [http://localhost:3001](http://localhost:3001)
+
+- **Frontend UI:** [http://localhost:5173](http://localhost:5173)
+- **Backend API:** [http://localhost:3001](http://localhost:3001)
 
 ### Stopping the Stack
+
 To stop the containers and completely wipe out all temporary database data and uploaded files:
+
 ```bash
 docker compose down -v
 ```
@@ -36,7 +40,7 @@ Follow these steps to deploy and run Project Kasane locally on your machine.
 
 ### Step 1: Start PostgreSQL and Create Database
 
-Since PostgreSQL is installed via scoop on Windows, run the following commands in your terminal:
+Start PostgreSQL
 
 ```powershell
 # Start PostgreSQL server
@@ -48,7 +52,7 @@ createdb -U postgres kasane
 
 ### Step 2: Start Redis on WSL
 
-Since Redis is run via Windows Subsystem for Linux (WSL), open your WSL terminal (e.g., Ubuntu) and start the Redis service:
+Start the Redis service:
 
 ```bash
 # Start Redis server
@@ -56,33 +60,28 @@ sudo service redis-server start
 
 # Verify Redis is running and listening on default port 6379
 redis-cli ping
-# Should respond with "PONG"
 ```
 
 ### Step 3: Set Up Environment Configuration
 
 From the project root on Windows, copy `.env.example` to `.env`:
 
-```powershell
-copy .env.example .env
-```
+The monorepo configured using this shared `.env` file. Below is the list of environment variables used:
 
-The application is configured using this shared `.env` file. Below is the list of environment variables used:
+| Variable            | Description                                              | Default     |
+| :------------------ | :------------------------------------------------------- | :---------- |
+| `PORT`              | The port the NestJS API backend server will run on       | `3001`      |
+| `REDIS_HOST`        | Host address for the Redis server (used by BullMQ)       | `127.0.0.1` |
+| `REDIS_PORT`        | Port number for the Redis server                         | `6379`      |
+| `REDIS_PASSWORD`    | Optional password for Redis connection                   | _None_      |
+| `DB_HOST`           | Host address for the PostgreSQL database server          | `127.0.0.1` |
+| `DB_PORT`           | Port number for the PostgreSQL database server           | `5432`      |
+| `DB_USERNAME`       | Username for the PostgreSQL server                       | `postgres`  |
+| `DB_PASSWORD`       | Password for the PostgreSQL server                       | _None_      |
+| `DB_NAME`           | Database name for PostgreSQL                             | `kasane`    |
+| `LOCAL_STORAGE_DIR` | Directory on disk to store uploaded and processed images | `./uploads` |
 
-| Variable                    | Description                                              | Default         |
-| :-------------------------- | :------------------------------------------------------- | :-------------- |
-| `PORT`                      | The port the NestJS API backend server will run on       | `3001`          |
-| `REDIS_HOST`                | Host address for the Redis server (used by BullMQ)       | `127.0.0.1`     |
-| `REDIS_PORT`                | Port number for the Redis server                         | `6379`          |
-| `REDIS_PASSWORD`            | Optional password for Redis connection                   | _None_          |
-| `DB_HOST`                   | Host address for the PostgreSQL database server          | `127.0.0.1`     |
-| `DB_PORT`                   | Port number for the PostgreSQL database server           | `5432`          |
-| `DB_USERNAME`               | Username for the PostgreSQL server                       | `postgres`      |
-| `DB_PASSWORD`               | Password for the PostgreSQL server                       | _None_          |
-| `DB_NAME`                   | Database name for PostgreSQL                             | `kasane`        |
-| `LOCAL_STORAGE_DIR`         | Directory on disk to store uploaded and processed images | `./uploads`     |
-
-_(By default, this is configured for PostgreSQL running at `127.0.0.1:5432` and local disk storage, meaning it will run immediately once the local services are running.)_
+adjust the configurations based on your local programs.
 
 ### Step 4: Run the NestJS Backend
 
@@ -96,7 +95,7 @@ npm run dev
 
 The backend server will start at [http://localhost:3001](http://localhost:3001) and will automatically initialize the database schema in PostgreSQL.
 
-### Step 5: Run the Image Processing Worker
+### Step 5: Run the Image Processing Worker(BullMQ)
 
 Open a new terminal in the `worker/` directory:
 
@@ -118,17 +117,18 @@ npm install --legacy-peer-deps
 npm run dev
 ```
 
-The Vite development server will spin up. Open your browser and navigate to the printed URL (typically [http://localhost:5173](http://localhost:5173)) to start resizing images!
+The Vite development server will open up (typically [http://localhost:5173](http://localhost:5173)) to start resizing images!
 
 ---
 
 ### Step 7: Running the Tests
 
-To verify that the application modules are functioning correctly, you can run the automated test suite. All tests run in-memory, completely isolated from your live PostgreSQL and Redis services.
+There are some unit/integration tests available for critical functions only, you can run the automated test suite. All tests run in-memory, the tests are completely isolated from your live PostgreSQL and Redis services.
 
 #### 1. How to Run
 
 You can run all tests sequentially with a single command from the project root:
+
 ```bash
 # 1. Install all dependencies across all layers (backend, worker, frontend)
 npm run install:all
@@ -137,33 +137,31 @@ npm run install:all
 npm run test
 ```
 
-Alternatively, you can run tests for specific layers from the root folder:
-* **Backend API Server tests:** `npm run test --prefix backend`
-* **Worker Service tests:** `npm run test --prefix worker`
-
-#### 2. Test Suite Details
+#### 2. Existing Test Suite Details
 
 ##### Backend Layer (NestJS API)
-* **App Controller Unit Tests** ([backend/test/app.controller.test.ts](backend/test/app.controller.test.ts)):
-  * Verifies the root endpoint returns the default NestJS greeting ("Hello World!").
-* **Upload Controller Unit Tests** ([backend/test/upload.controller.test.ts](backend/test/upload.controller.test.ts)):
-  * Verifies correct metadata returns (like `jobId`) for valid image uploads.
-  * Ensures a `BadRequestException` is thrown when a file is missing.
-  * Ensures uploads larger than 20MB are blocked.
-  * Ensures non-image files (e.g. `text/plain`) are blocked.
-* **Upload Service Unit Tests** ([backend/test/upload.service.test.ts](backend/test/upload.service.test.ts)):
-  * Confirms the upload service stores files correctly, initializes database entries as `pending`, and pushes jobs to the Redis/BullMQ queue.
-  * Verifies gracefully throwing exceptions if the storage layer fails mid-upload.
-* **Jobs Service Integration Tests** ([backend/test/jobs.service.test.ts](backend/test/jobs.service.test.ts)):
-  * Tests datastore persistence logic by mocking the TypeORM Repository to ensure mock entries can be retrieved and created in isolation without hitting your active PostgreSQL database.
+
+- **App Controller Unit Tests** ([backend/test/app.controller.test.ts](backend/test/app.controller.test.ts)):
+  - Verifies the root endpoint returns default endpoint.
+- **Upload Controller Unit Tests** ([backend/test/upload.controller.test.ts](backend/test/upload.controller.test.ts)):
+  - Verifies correct metadata returns (like `jobId`) for valid image uploads.
+  - Ensures a `BadRequestException` is thrown when a file is missing.
+  - Ensures uploads larger than 20MB are blocked.
+  - Ensures non-image files (e.g. `text/plain`) are blocked.
+- **Upload Service Unit Tests** ([backend/test/upload.service.test.ts](backend/test/upload.service.test.ts)):
+  - Confirms the upload service stores files correctly, initializes database entries as `pending`, and pushes jobs to the Redis/BullMQ queue.
+  - Verifies gracefully throwing exceptions if the storage layer fails mid-upload.
+- **Jobs Service Integration Tests** ([backend/test/jobs.service.test.ts](backend/test/jobs.service.test.ts)):
+  - Tests datastore persistence logic by mocking the TypeORM Repository to ensure mock entries can be retrieved and created in isolation without hitting your active PostgreSQL database.
 
 ##### Worker Layer (Image Processor)
-* **Image Processor Unit Tests** ([worker/test/image.processor.test.ts](worker/test/image.processor.test.ts)):
-  * **Portrait Scaling:** Verifies that a $1000 \times 2000$ image scales down proportionally to exactly $640 \times 1280$ (longest edge capped to 1280px).
-  * **Landscape Scaling:** Verifies that a $2000 \times 1000$ image scales down proportionally to exactly $1280 \times 640$.
-  * **Square Scaling:** Verifies that a small $500 \times 500$ image scales up cleanly to $1280 \times 1280$.
-  * **WebP Conversion:** Asserts output formats are correctly transformed to `webp`.
-  * **Error Handling:** Asserts bad or corrupt binary buffers are rejected with a thrown exception.
+
+- **Image Processor Unit Tests** ([worker/test/image.processor.test.ts](worker/test/image.processor.test.ts)):
+  - **Portrait Scaling:** Verifies that a $1000 \times 2000$ image scales down proportionally to exactly $640 \times 1280$ (longest edge capped to 1280px).
+  - **Landscape Scaling:** Verifies that a $2000 \times 1000$ image scales down proportionally to exactly $1280 \times 640$.
+  - **Square Scaling:** Verifies that a small $500 \times 500$ image scales up cleanly to $1280 \times 1280$.
+  - **WebP Conversion:** Asserts output formats are correctly transformed to `webp`.
+  - **Error Handling:** Asserts bad or corrupt binary buffers are rejected with a thrown exception.
 
 ---
 
@@ -171,29 +169,32 @@ Alternatively, you can run tests for specific layers from the root folder:
 
 ### 3.1 Architectural Decisions & System Flow
 
-The system is designed with a **layered, asynchronous worker architecture** to reflect standard production patterns for CPU-intensive tasks. Below is the flow of the application and the rationale behind each key architectural decision:
+Below is the flow of the application and the explanataion behind each key architectural decision:
 
 #### 1. Decoupled Worker Architecture (BullMQ & Redis)
-* **How it works:** When a user uploads an image, the NestJS API server uploads the original file to storage, creates a database record, enqueues a processing task in **BullMQ (backed by Redis)**, and immediately returns the `jobId` to the frontend without waiting for processing.
-* **Why this choice:** Image manipulation is a CPU-bound operation. By immediately returning a response and offloading the processing to BullMQ, we prevent blocking the NestJS event loop. This ensures the API server remains fast, responsive, and capable of handling high volumes of concurrent requests.
+
+- **How it works:** When a user uploads an image, the NestJS API server uploads the original file to storage, creates a database record, enqueues a processing task in **BullMQ (backed by Redis)**, and immediately returns the `jobId` to the frontend without waiting for processing.
+- **Why this choice:** Image manipulation is a CPU-bound operation. By immediately returning a response and offloading the processing to BullMQ, we prevent blocking the NestJS event loop. This ensures the API server remains fast, responsive, and capable of handling high volumes of concurrent requests.
 
 #### 2. Separation of Services (API vs. Worker)
-* **How it works:** The NestJS API server and the Image Processing Worker run as separate, independent processes.
-* **Why this choice:** In production, HTTP traffic (I/O-bound) and image resizing (CPU-bound) have very different resource demands. Separating them allows them to scale independently. During heavy load, we can run multiple instances of the worker service without needing to scale the API servers.
+
+- **How it works:** The NestJS API server and the Image Processing Worker run as separate, independent processes.
+- **Why this choice:** In production, HTTP traffic (I/O-bound) and image resizing (CPU-bound) have very different resource demands. Separating them allows them to scale independently. During heavy load, we can run multiple instances of the worker service without needing to scale the API servers.
 
 #### 3. Image Processing Engine (Sharp)
-* **How it works:** The background worker uses the **Sharp** library to resize the image (longest side to 1280px, maintaining aspect ratio), compress it to 80% quality, and convert it to WebP format.
-* **Why this choice:** Sharp is powered by the `libvips` C library. It is typically 4x to 5x faster than pure JavaScript alternatives (like Jimp) and consumes a fraction of the memory, which is critical for handling large images up to 20MB.
+
+- **How it works:** The background worker uses the **Sharp** library to resize the image (longest side to 1280px, maintaining aspect ratio), compress it to 80% quality, and convert it to WebP format.
+- **Why this choice:** Sharp is powered by the `libvips` C library. It is typically 4x to 5x faster than pure JavaScript alternatives (like Jimp) and consumes a fraction of the memory, which is critical for handling large images up to 20MB.
 
 #### 4. Local Disk Storage Layer
-* **How it works:** Both the API and Worker interface with a `StorageService` class that saves and retrieves files from disk storage.
-* **Why this choice:** Saving to local disk provides a fast, zero-dependency environment for local development and container runs. The `StorageService` abstracts the filesystem calls so it can be easily updated in the future to support cloud providers if needed.
+
+- **How it works:** Both the API and Worker interface with a `StorageService` class that saves and retrieves files from disk storage.
+- **Why this choice:** Saving to local disk provides a fast, zero-dependency environment for local development and container runs. The `StorageService` abstracts the filesystem calls so it can be easily updated in the future to support cloud providers if needed.
 
 #### 5. Exponential Backoff Polling
-* **How it works:** The React frontend polls the job status (`GET /jobs/:id`) starting at 2s intervals. If the job takes longer, it backs off to 4s, 8s, and caps at 16s. Polling stops immediately upon job completion or failure.
-* **Why this choice:** Polling is a simple and reliable way to fetch status. Using exponential backoff protects the server from being spammed with requests by active clients during periods of high queue congestion or long-running tasks.
 
-
+- **How it works:** The React frontend polls the job status (`GET /jobs/:id`) starting at 2s intervals. If the job takes longer, it backs off to 4s, 8s, and caps at 16s. Polling stops immediately upon job completion or failure.
+- **Why this choice:** Polling is a simple and reliable way to fetch status. Using exponential backoff protects the server from being spammed with requests by active clients during periods of high queue congestion or long-running tasks.
 
 ### 3.2 Architecture Diagram
 
@@ -217,25 +218,29 @@ graph TD
 
 ## 4. Graceful Crash Handling & Fault Tolerance
 
-Project Kasane implements a "defense-in-depth" fault tolerance strategy to ensure that worker crashes, database blips, and server shutdowns are handled gracefully without leaving the system in a locked state or losing track of active jobs.
+Crash handling are defined per layer to ensure db stays in sync with redis.
 
 ### 1. Visibility Timeout & Lock Expiration (BullMQ)
-* **Mechanism:** When the worker process takes a job from the queue, BullMQ locks the job in Redis (default 30 seconds). The worker continuously renews this lock in the background while processing.
-* **Failure Recovery:** If the worker crashes hard (e.g., OOM kill, hardware failure) and stops renewing the lock, the lock expires. BullMQ detects the expired lock, assumes the worker has died, releases the job, and makes it available for other active workers to retry.
+
+- **Mechanism:** When the worker process takes a job from the queue, BullMQ locks the job in Redis (default 30 seconds). The worker continuously renews this lock in the background while processing.
+- **Failure Recovery:** If the worker crashes hard (e.g., OOM kill, hardware failure) and stops renewing the lock, the lock expires. BullMQ detects the expired lock, assumes the worker has died, releases the job, and makes it available for other active workers to retry.
 
 ### 2. Automatic Exponential Retries
-* **Mechanism:** Every job is enqueued in the NestJS backend with `attempts: 3` and an exponential backoff delay starting at 1000ms.
-* **Failure Recovery:** If a transient failure occurs (such as a temporary database disconnect or an upload timeout), the worker re-throws the exception, and BullMQ schedules a retry. The job will be retried up to 3 times with increasing delays ($1\text{s}$, $2\text{s}$, $4\text{s}$) before it is finally marked as failed.
+
+- **Mechanism:** Every job is enqueued in the NestJS backend with `attempts: 3` and an exponential backoff delay starting at 1000ms.
+- **Failure Recovery:** If a transient failure occurs (such as a temporary database disconnect or an upload timeout), the worker re-throws the exception, and BullMQ schedules a retry. The job will be retried up to 3 times with increasing delays ($1\text{s}$, $2\text{s}$, $4\text{s}$) before it is finally marked as failed.
 
 ### 3. Idempotent Processing (Overwrite Protection)
-* **Mechanism:** All files and database entries are mapped directly to the unique `jobId` UUID generated upon initial upload.
-* **Failure Recovery:** If a worker crashes halfway through processing and the job is retried, the second attempt will overwrite the existing file keys (`originals/jobId.ext` and `processed/jobId.webp`) rather than creating duplicate orphaned files. This guarantees that multiple attempts always result in the same consistent final state.
+
+- **Mechanism:** All files and database entries are mapped directly to the unique `jobId` UUID generated upon initial upload.
+- **Failure Recovery:** If a worker crashes halfway through processing and the job is retried, the second attempt will overwrite the existing file keys (`originals/jobId.ext` and `processed/jobId.webp`) rather than creating duplicate orphaned files. This guarantees that multiple attempts always result in the same consistent final state.
 
 ### 4. Graceful Shutdown (OS Signal Interceptors)
-* **Mechanism:** The background worker listens to OS termination signals (`SIGTERM` and `SIGINT`).
-* **Failure Recovery:** Upon intercepting a shutdown request (e.g., container stopping or system reboot), the worker invokes `worker.close()`. This stops the worker from taking new jobs from the queue and gives any active image processing tasks a chance to finish. Once complete, it closes all PostgreSQL database connections (`dataSource.destroy()`) and exits cleanly.
+
+- **Mechanism:** The background worker listens to OS termination signals (`SIGTERM` and `SIGINT`).
+- **Failure Recovery:** Upon intercepting a shutdown request (e.g., container stopping or system reboot), the worker invokes `worker.close()`. This stops the worker from taking new jobs from the queue and gives any active image processing tasks a chance to finish. Once complete, it closes all PostgreSQL database connections (`dataSource.destroy()`) and exits cleanly.
 
 ### 5. Startup Stalled Sweeper (Orphaned Job Recovery)
-* **Mechanism:** On application startup, the NestJS backend executes a database sweeper query.
-* **Failure Recovery:** The query identifies any database jobs stuck in the `pending` or `processing` state for more than 5 minutes (indicating a hard worker crash that prevented it from updating the database status) and marks them as `failed` with the error message `"Job stalled due to worker crash or timeout"`. This ensures the frontend immediately stops polling and displays a clean error state to the user.
 
+- **Mechanism:** On application startup, the NestJS backend executes a database sweeper query.
+- **Failure Recovery:** The query identifies any database jobs stuck in the `pending` or `processing` state for more than 5 minutes (indicating a hard worker crash that prevented it from updating the database status) and marks them as `failed` with the error message `"Job stalled due to worker crash or timeout"`. This ensures the frontend immediately stops polling and displays a clean error state to the user.
