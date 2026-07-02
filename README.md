@@ -110,13 +110,29 @@ The Vite development server will spin up. Open your browser and navigate to the 
 
 ## 3. Architecture Choice
 
-### 3.1 System Flow & Execution Mechanism
+### 3.1 Architectural Decisions & System Flow
 
-When a user selects or drags an image into the React frontend, the app validates the file format (JPG, PNG, WebP) and size (under 20MB). On validation success, it sends a multipart `POST /upload` request to the NestJS API server. The API server uploads the original image to the configured storage provider (local folder or Supabase bucket) and creates a record in the PostgreSQL database with a status of `pending`. The server then enqueues a background task in the BullMQ queue (backed by Redis) and immediately returns the job ID to the frontend without waiting for the image to be processed.
+The system is designed with a **layered, asynchronous worker architecture** to reflect standard production patterns for CPU-intensive tasks. Below is the flow of the application and the rationale behind each key architectural decision:
 
-Once the job is queued in Redis, BullMQ handles task distribution. The separate, dedicated Worker Service listens to this queue; when it becomes idle, BullMQ assigns the next available job to the worker. Upon receipt, the worker immediately updates the job status in the PostgreSQL database to `processing`. The worker then downloads the original image from the storage provider, processes it sequentially using the Sharp engine (resizing the longest side to 1280px maintaining aspect ratio, converting to WebP, and compressing to 80% quality), uploads the optimized image back to the storage provider, and updates the database job status to `completed` (or `failed` with error details if an exception is caught).
+#### 1. Decoupled Worker Architecture (BullMQ & Redis)
+* **How it works:** When a user uploads an image, the NestJS API server uploads the original file to storage, creates a database record, enqueues a processing task in **BullMQ (backed by Redis)**, and immediately returns the `jobId` to the frontend without waiting for processing.
+* **Why this choice:** Image manipulation is a CPU-bound operation. By immediately returning a response and offloading the processing to BullMQ, we prevent blocking the NestJS event loop. This ensures the API server remains fast, responsive, and capable of handling high volumes of concurrent requests.
 
-Meanwhile, the React frontend polls the status of the job by sending a `GET /jobs/:id` request to the NestJS server. Polling begins immediately at a 2-second interval. It implements an exponential backoff strategy (increasing the polling interval to 4s, 8s, and capping at 16s if the job takes longer) to minimize server load. Once the poll returns a status of `completed`, polling stops, and the frontend reveals a download button pointing to the NestJS server's `GET /jobs/:id/download` stream endpoint.
+#### 2. Separation of Services (API vs. Worker)
+* **How it works:** The NestJS API server and the Image Processing Worker run as separate, independent processes.
+* **Why this choice:** In production, HTTP traffic (I/O-bound) and image resizing (CPU-bound) have very different resource demands. Separating them allows them to scale independently. During heavy load, we can run multiple instances of the worker service without needing to scale the API servers.
+
+#### 3. Image Processing Engine (Sharp)
+* **How it works:** The background worker uses the **Sharp** library to resize the image (longest side to 1280px, maintaining aspect ratio), compress it to 80% quality, and convert it to WebP format.
+* **Why this choice:** Sharp is powered by the `libvips` C library. It is typically 4x to 5x faster than pure JavaScript alternatives (like Jimp) and consumes a fraction of the memory, which is critical for handling large images up to 20MB.
+
+#### 4. Abstracted Storage Layer (Local vs. Cloud)
+* **How it works:** Both the API and Worker interface with a generic `StorageService` class. The storage provider can be toggled in `.env` between `local` disk storage and `supabase` cloud storage.
+* **Why this choice:** This clean abstraction enables instant local development fallback (no setup required) while allowing seamless deployment to production cloud storage (like AWS S3 or Supabase Storage) by changing a single environment variable, without touching the core code.
+
+#### 5. Exponential Backoff Polling
+* **How it works:** The React frontend polls the job status (`GET /jobs/:id`) starting at 2s intervals. If the job takes longer, it backs off to 4s, 8s, and caps at 16s. Polling stops immediately upon job completion or failure.
+* **Why this choice:** Polling is a simple and reliable way to fetch status. Using exponential backoff protects the server from being spammed with requests by active clients during periods of high queue congestion or long-running tasks.
 
 ### 3.2 Architecture Diagram
 
