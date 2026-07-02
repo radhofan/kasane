@@ -105,13 +105,13 @@ async function start() {
 
   console.log('BullMQ Worker is running and waiting for jobs...');
 
-  // Graceful shutdown handling (Option A)
+  // Graceful shutdown
   const gracefulShutdown = async (signal: string) => {
     console.log(`Received ${signal}. Starting graceful shutdown...`);
     
     console.log('Closing BullMQ worker (waiting for active jobs to complete)...');
     try {
-      // Closes the worker, refusing new jobs and waiting for active ones to finish
+      // Stop accepting new jobs and wait for running processes to finish
       await worker.close();
       console.log('BullMQ worker closed.');
     } catch (err: unknown) {
