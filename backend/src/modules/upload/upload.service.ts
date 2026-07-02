@@ -25,7 +25,7 @@ export class UploadService {
     const originalKey = `originals/${jobId}.${extension}`;
 
     try {
-      // 1. Upload original file to Storage (Supabase or Local)
+      // 1. Upload original file to storage
       await this.storageService.uploadFile(originalKey, file.buffer, file.mimetype);
 
       // 2. Create database job record

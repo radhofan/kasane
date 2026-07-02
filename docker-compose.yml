@@ -45,7 +45,6 @@ services:
       - DB_NAME=kasane
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - STORAGE_PROVIDER=local
       - LOCAL_STORAGE_DIR=/usr/src/app/uploads
     depends_on:
       postgres:
@@ -69,7 +68,6 @@ services:
       - DB_NAME=kasane
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - STORAGE_PROVIDER=local
       - LOCAL_STORAGE_DIR=/usr/src/app/uploads
     depends_on:
       postgres:

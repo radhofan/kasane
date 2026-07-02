@@ -19,7 +19,7 @@ docker compose up --build
 
 ### Accessing the Application
 Once the containers are running, you can access the services directly at these URLs:
-* **Frontend UI:** [http://localhost:5173](http://localhost:5173) (Served by Nginx)
+* **Frontend UI:** [http://localhost:5173](http://localhost:5173)
 * **Backend API:** [http://localhost:3001](http://localhost:3001)
 
 ### Stopping the Stack
@@ -80,13 +80,9 @@ The application is configured using this shared `.env` file. Below is the list o
 | `DB_USERNAME`               | Username for the PostgreSQL server                       | `postgres`      |
 | `DB_PASSWORD`               | Password for the PostgreSQL server                       | _None_          |
 | `DB_NAME`                   | Database name for PostgreSQL                             | `kasane`        |
-| `STORAGE_PROVIDER`          | Storage backend driver. Supported: `local` or `supabase` | `local`         |
-| `LOCAL_STORAGE_DIR`         | Directory on disk to store images (when using `local`)   | `./uploads`     |
-| `SUPABASE_URL`              | Your Supabase project URL (when using `supabase`)        | _None_          |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (when using `supabase`)        | _None_          |
-| `SUPABASE_BUCKET`           | The Supabase Storage bucket name                         | `kasane-images` |
+| `LOCAL_STORAGE_DIR`         | Directory on disk to store uploaded and processed images | `./uploads`     |
 
-_(By default, this is configured for PostgreSQL running at `127.0.0.1:5432` and **Local Storage** fallback, meaning it will run immediately once the local services are running.)_
+_(By default, this is configured for PostgreSQL running at `127.0.0.1:5432` and local disk storage, meaning it will run immediately once the local services are running.)_
 
 ### Step 4: Run the NestJS Backend
 
@@ -189,9 +185,9 @@ The system is designed with a **layered, asynchronous worker architecture** to r
 * **How it works:** The background worker uses the **Sharp** library to resize the image (longest side to 1280px, maintaining aspect ratio), compress it to 80% quality, and convert it to WebP format.
 * **Why this choice:** Sharp is powered by the `libvips` C library. It is typically 4x to 5x faster than pure JavaScript alternatives (like Jimp) and consumes a fraction of the memory, which is critical for handling large images up to 20MB.
 
-#### 4. Abstracted Storage Layer (Local vs. Cloud)
-* **How it works:** Both the API and Worker interface with a generic `StorageService` class. The storage provider can be toggled in `.env` between `local` disk storage and `supabase` cloud storage.
-* **Why this choice:** This clean abstraction enables instant local development fallback (no setup required) while allowing seamless deployment to production cloud storage (like AWS S3 or Supabase Storage) by changing a single environment variable, without touching the core code.
+#### 4. Local Disk Storage Layer
+* **How it works:** Both the API and Worker interface with a `StorageService` class that saves and retrieves files from disk storage.
+* **Why this choice:** Saving to local disk provides a fast, zero-dependency environment for local development and container runs. The `StorageService` abstracts the filesystem calls so it can be easily updated in the future to support cloud providers if needed.
 
 #### 5. Exponential Backoff Polling
 * **How it works:** The React frontend polls the job status (`GET /jobs/:id`) starting at 2s intervals. If the job takes longer, it backs off to 4s, 8s, and caps at 16s. Polling stops immediately upon job completion or failure.
