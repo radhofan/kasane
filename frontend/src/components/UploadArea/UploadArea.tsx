@@ -92,7 +92,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({ onUpload, onError, disab
         <GText variant="p-small" as="span" className="upload-or">
           or
         </GText>
-        <GFillButton onClick={(e) => { e.stopPropagation(); triggerFileInput(); }} disabled={disabled}>
+        <GFillButton onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); triggerFileInput(); }} disabled={disabled}>
           Browse File
         </GFillButton>
       </div>

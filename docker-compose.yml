@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: kasane-db
+    environment:
+      POSTGRES_DB: kasane
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecurepassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: kasane-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kasane-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=mysecurepassword
+      - DB_NAME=kasane
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - STORAGE_PROVIDER=local
+      - LOCAL_STORAGE_DIR=/usr/src/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads-data:/usr/src/app/uploads
+    restart: always
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: kasane-worker
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=mysecurepassword
+      - DB_NAME=kasane
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - STORAGE_PROVIDER=local
+      - LOCAL_STORAGE_DIR=/usr/src/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads-data:/usr/src/app/uploads
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:3001
+    container_name: kasane-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  pgdata:
+  uploads-data:

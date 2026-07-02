@@ -1,0 +1,10 @@
+{
+  "name": "kasane-root",
+  "version": "1.0.0",
+  "description": "Root workspace tasks for Project Kasane",
+  "private": true,
+  "scripts": {
+    "test": "npm run test --prefix backend && npm run test --prefix worker",
+    "install:all": "npm install --prefix backend && npm install --prefix worker && npm install --legacy-peer-deps --prefix frontend"
+  }
+}

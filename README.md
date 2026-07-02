@@ -8,26 +8,25 @@
 
 ---
 
-## 1. Environment Configuration
+## 1. Docker Compose Tutorial
 
-The application is configured using a shared `.env` file at the root of the project. A `.env.example` is provided as a reference.
+If you have Docker Desktop installed, you can spin up the entire monorepo stack (PostgreSQL, Redis, NestJS Backend, Background Worker, and React Frontend) with a single command from the project root:
 
-| Variable                    | Description                                              | Default         |
-| :-------------------------- | :------------------------------------------------------- | :-------------- |
-| `PORT`                      | The port the NestJS API backend server will run on       | `3001`          |
-| `REDIS_HOST`                | Host address for the Redis server (used by BullMQ)       | `127.0.0.1`     |
-| `REDIS_PORT`                | Port number for the Redis server                         | `6379`          |
-| `REDIS_PASSWORD`            | Optional password for Redis connection                   | _None_          |
-| `DB_HOST`                   | Host address for the PostgreSQL database server          | `127.0.0.1`     |
-| `DB_PORT`                   | Port number for the PostgreSQL database server           | `5432`          |
-| `DB_USERNAME`               | Username for the PostgreSQL server                       | `postgres`      |
-| `DB_PASSWORD`               | Password for the PostgreSQL server                       | _None_          |
-| `DB_NAME`                   | Database name for PostgreSQL                             | `kasane`        |
-| `STORAGE_PROVIDER`          | Storage backend driver. Supported: `local` or `supabase` | `local`         |
-| `LOCAL_STORAGE_DIR`         | Directory on disk to store images (when using `local`)   | `./uploads`     |
-| `SUPABASE_URL`              | Your Supabase project URL (when using `supabase`)        | _None_          |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (when using `supabase`)        | _None_          |
-| `SUPABASE_BUCKET`           | The Supabase Storage bucket name                         | `kasane-images` |
+```bash
+# Build and start all services
+docker compose up --build
+```
+
+### Accessing the Application
+Once the containers are running, you can access the services directly at these URLs:
+* **Frontend UI:** [http://localhost:5173](http://localhost:5173) (Served by Nginx)
+* **Backend API:** [http://localhost:3001](http://localhost:3001)
+
+### Stopping the Stack
+To stop the containers and completely wipe out all temporary database data and uploaded files:
+```bash
+docker compose down -v
+```
 
 ---
 
@@ -68,7 +67,26 @@ From the project root on Windows, copy `.env.example` to `.env`:
 copy .env.example .env
 ```
 
-_(By default, this is configured for PostgreSQL running at `127.0.0.1:5432` and **Local Storage** fallback, meaning it will run immediately once the services are running.)_
+The application is configured using this shared `.env` file. Below is the list of environment variables used:
+
+| Variable                    | Description                                              | Default         |
+| :-------------------------- | :------------------------------------------------------- | :-------------- |
+| `PORT`                      | The port the NestJS API backend server will run on       | `3001`          |
+| `REDIS_HOST`                | Host address for the Redis server (used by BullMQ)       | `127.0.0.1`     |
+| `REDIS_PORT`                | Port number for the Redis server                         | `6379`          |
+| `REDIS_PASSWORD`            | Optional password for Redis connection                   | _None_          |
+| `DB_HOST`                   | Host address for the PostgreSQL database server          | `127.0.0.1`     |
+| `DB_PORT`                   | Port number for the PostgreSQL database server           | `5432`          |
+| `DB_USERNAME`               | Username for the PostgreSQL server                       | `postgres`      |
+| `DB_PASSWORD`               | Password for the PostgreSQL server                       | _None_          |
+| `DB_NAME`                   | Database name for PostgreSQL                             | `kasane`        |
+| `STORAGE_PROVIDER`          | Storage backend driver. Supported: `local` or `supabase` | `local`         |
+| `LOCAL_STORAGE_DIR`         | Directory on disk to store images (when using `local`)   | `./uploads`     |
+| `SUPABASE_URL`              | Your Supabase project URL (when using `supabase`)        | _None_          |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (when using `supabase`)        | _None_          |
+| `SUPABASE_BUCKET`           | The Supabase Storage bucket name                         | `kasane-images` |
+
+_(By default, this is configured for PostgreSQL running at `127.0.0.1:5432` and **Local Storage** fallback, meaning it will run immediately once the local services are running.)_
 
 ### Step 4: Run the NestJS Backend
 
@@ -105,6 +123,51 @@ npm run dev
 ```
 
 The Vite development server will spin up. Open your browser and navigate to the printed URL (typically [http://localhost:5173](http://localhost:5173)) to start resizing images!
+
+---
+
+### Step 7: Running the Tests
+
+To verify that the application modules are functioning correctly, you can run the automated test suite. All tests run in-memory, completely isolated from your live PostgreSQL and Redis services.
+
+#### 1. How to Run
+
+You can run all tests sequentially with a single command from the project root:
+```bash
+# 1. Install all dependencies across all layers (backend, worker, frontend)
+npm run install:all
+
+# 2. Run all test suites (backend & worker)
+npm run test
+```
+
+Alternatively, you can run tests for specific layers from the root folder:
+* **Backend API Server tests:** `npm run test --prefix backend`
+* **Worker Service tests:** `npm run test --prefix worker`
+
+#### 2. Test Suite Details
+
+##### Backend Layer (NestJS API)
+* **App Controller Unit Tests** ([backend/test/app.controller.test.ts](backend/test/app.controller.test.ts)):
+  * Verifies the root endpoint returns the default NestJS greeting ("Hello World!").
+* **Upload Controller Unit Tests** ([backend/test/upload.controller.test.ts](backend/test/upload.controller.test.ts)):
+  * Verifies correct metadata returns (like `jobId`) for valid image uploads.
+  * Ensures a `BadRequestException` is thrown when a file is missing.
+  * Ensures uploads larger than 20MB are blocked.
+  * Ensures non-image files (e.g. `text/plain`) are blocked.
+* **Upload Service Unit Tests** ([backend/test/upload.service.test.ts](backend/test/upload.service.test.ts)):
+  * Confirms the upload service stores files correctly, initializes database entries as `pending`, and pushes jobs to the Redis/BullMQ queue.
+  * Verifies gracefully throwing exceptions if the storage layer fails mid-upload.
+* **Jobs Service Integration Tests** ([backend/test/jobs.service.test.ts](backend/test/jobs.service.test.ts)):
+  * Tests datastore persistence logic by mocking the TypeORM Repository to ensure mock entries can be retrieved and created in isolation without hitting your active PostgreSQL database.
+
+##### Worker Layer (Image Processor)
+* **Image Processor Unit Tests** ([worker/test/image.processor.test.ts](worker/test/image.processor.test.ts)):
+  * **Portrait Scaling:** Verifies that a $1000 \times 2000$ image scales down proportionally to exactly $640 \times 1280$ (longest edge capped to 1280px).
+  * **Landscape Scaling:** Verifies that a $2000 \times 1000$ image scales down proportionally to exactly $1280 \times 640$.
+  * **Square Scaling:** Verifies that a small $500 \times 500$ image scales up cleanly to $1280 \times 1280$.
+  * **WebP Conversion:** Asserts output formats are correctly transformed to `webp`.
+  * **Error Handling:** Asserts bad or corrupt binary buffers are rejected with a thrown exception.
 
 ---
 
